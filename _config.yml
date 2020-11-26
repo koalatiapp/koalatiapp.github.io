@@ -36,6 +36,7 @@ gh_edit_repository: "https://github.com/koalatiapp/koalatiapp.github.io" # the g
 gh_edit_branch: "master" # the branch that your docs is served from
 
 # Build settings
+remote-theme: just-the-docs
 theme: just-the-docs
 
 # Exclude from processing.
