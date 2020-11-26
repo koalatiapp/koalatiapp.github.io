@@ -37,7 +37,7 @@ gh_edit_branch: "master" # the branch that your docs is served from
 
 # Build settings
 remote_theme: pmarsceill/just-the-docs
-theme: just-the-docs
+#theme: just-the-docs
 
 # Exclude from processing.
 # The following items will not be processed, by default.
