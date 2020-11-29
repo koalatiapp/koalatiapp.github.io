@@ -45,7 +45,7 @@ npm install
     Koalati tools are based on [Puppeteer](https://github.com/puppeteer/puppeteer){: target="_blank" .text-grey-dk-100 }, which installs and uses the Chromium browser. Contributors who work on many Koalati tools might prefer to only download and install one instance of Puppeteer and Chromium to use with every tool in order to save storage space. For more information about how to do this, [view this StackOverflow post on the subject](https://stackoverflow.com/questions/15636367/nodejs-require-a-global-module-package){: target="_blank" .text-grey-dk-100 }.
     {: .fs-2 .text-grey-dk-000 }
 
-4. Make the desired changes and/or additions to the tool's source code. For more information about how Koalati tools work and are structured, [view the Tools section](docs/tools).
+4. Make the desired changes and/or additions to the tool's source code. For more information about how Koalati tools work and are structured, [view the Tools section](/docs/tools).
 
 5. Test your tool from the CLI using one of the two following commands. If no error occurred, JSON results should be returned and displayed in your CLI. Otherwise, the error's information will appear.
     - Run your tool on Koalati's homepage like such:
@@ -58,7 +58,7 @@ npm install
     ```
 
 ## Publishing your contributions
-Once your development is complete, visit the [Contributing section](docs/contributing) to learn how to get your tool published and used in Koalati.
+Once your development is complete, visit the [Contributing section](/docs/contributing) to learn how to get your tool published and used in Koalati.
 
 ## Support
 If you encounter problems while creating a tool or contributing to an existing one, feel free to reach out at [info@koalati.com](mailto:info@koalati.com) or to submit an issue on GitHub.
