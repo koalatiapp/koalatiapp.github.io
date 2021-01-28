@@ -47,10 +47,10 @@ npm install
 
 4. Make the desired changes and/or additions to the tool's source code. For more information about how Koalati tools work and are structured, [view the Tools section](/docs/tools).
 
-5. Test your tool from the CLI using one of the two following commands. If no error occurred, JSON results should be returned and displayed in your CLI. Otherwise, the error's information will appear.
+5. Run your tool from the CLI using one of the two following commands. If no error occurred, JSON results should be returned and displayed in your CLI. Otherwise, the error's information will appear.
     - Run your tool on Koalati's homepage like such:
     ```bash
-    npm test
+    npm run debug
     ```
     - Run your tool on the URL of your choice by running the [@koalati/dev-tool-tester](https://github.com/koalatiapp/dev-tool-tester) script, as such:
     ```bash

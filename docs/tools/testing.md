@@ -36,6 +36,20 @@ To avoid that from happening to you, take a look at our section documenting the 
 
 [View the Results format and validation section](/docs/tools/formatting-results){: .btn .btn-purple }
 
-## Unit testing
-Coming soon
-{: .label .label-yellow }
+## Unit/functional testing
+The [tool template](https://github.com/koalatiapp/tool-template) comes with a basic testing setup, which uses [`mocha`](https://mochajs.org/), [Node's `assert`](https://nodejs.org/api/assert.html) and the [`@koalati/dev-tool-tester`'s `runTool`](https://github.com/koalatiapp/dev-tool-tester) function.
+
+You can run your tool's tests by running the following command:
+```bash
+npm test
+```
+
+The `runTool` function is the most important aspect of it all, as it provides all of the dependencies and logic required to run your tool on a webpage (or local file). All you have to manage is the validation of the results. You can find more information about it in the [`@koalati/dev-tool-tester`](https://github.com/koalatiapp/dev-tool-tester)'s repository.
+
+The tests are found in the `test` directory of this template. It contains three files you'll most likely want to update or expand upon in your own tool:
+- `/test/sample.html`: a simple HTML file on which your tool will be ran for the test's purpose.
+- `/test/expectation.json`: a JSON containing the results that are expected to come out of your tool when it is ran on the `/test/sample.html` page.
+- `/test/index.js`: the actual script that defines and executes the tests.
+
+### Testing framework
+Although `mocha` is bundled in with the tool template by default, you are free to use any testing framework you like: there is no limitations when it comes to dev dependencies.
