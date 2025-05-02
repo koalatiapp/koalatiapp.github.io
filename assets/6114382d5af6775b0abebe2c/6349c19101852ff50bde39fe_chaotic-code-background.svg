@@ -1,0 +1,473 @@
+<svg version="1.2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080"><style>tspan{white-space:pre}.a{font-size: 24px;fill: #ffffff;font-weight: 400;font-family: "Inconsolata-Regular", "Inconsolata", "Courier", "Andale Mono", "Courier New", "Menlo", "Monaco", "monospace"}</style><text style="transform:matrix(1,0,0,1,-73,-11)" ><tspan x="0" y="28.8" class="a">		const queue = new Queue();
+</tspan><tspan x="0" y="57.6" class="a">		const request = await queue.next(this.previousRequest ? this.previousRequest.url : null);
+</tspan><tspan x="0" y="115.2" class="a">		if (!request) {
+</tspan><tspan x="0" y="144" class="a">			await queue.disconnect();
+</tspan><tspan x="0" y="172.8" class="a">			this.selfDestroy();
+</tspan><tspan x="0" y="201.6" class="a">			return;
+</tspan><tspan x="0" y="230.4" class="a">		}
+</tspan><tspan x="0" y="288" class="a">		const sentryTransaction = Sentry.startTransaction({
+</tspan><tspan x="0" y="316.8" class="a">			op: &quot;request&quot;,
+</tspan><tspan x="0" y="345.6" class="a">			name: request.tool,
+</tspan><tspan x="0" y="374.4" class="a">			data: {
+</tspan><tspan x="0" y="403.2" class="a">				request
+</tspan><tspan x="0" y="432" class="a">			}
+</tspan><tspan x="0" y="460.8" class="a">		});
+</tspan><tspan x="0" y="489.6" class="a">		this.activeRequest = request;
+</tspan><tspan x="0" y="547.2" class="a">		// Mark the request as being processed to prevent other processors from processing it
+</tspan><tspan x="0" y="576" class="a">		await queue.markAsProcessing(request.id);
+</tspan><tspan x="0" y="604.8" class="a">		await queue.disconnect();
+</tspan><tspan x="0" y="633.6" class="a">		const processingStartTime = Date.now();
+</tspan><tspan x="0" y="662.4" class="a">		console.log(`Request ${request.id} is now being processed... (${request.tool} for ${request.url})`);
+</tspan><tspan x="0" y="720" class="a">		try {
+</tspan><tspan x="0" y="748.8" class="a">			/**
+</tspan><tspan x="0" y="777.6" class="a">             * @TODO: Check if the previous request's tool is destructive, and reload the page if it is.
+</tspan><tspan x="0" y="806.4" class="a">             * The page should also be reloaded if the previous request resulted in an error, </tspan><tspan  y="806.4" class="a">
+</tspan><tspan x="0" y="835.2" class="a">	</tspan><tspan  y="835.2" class="a">	</tspan><tspan  y="835.2" class="a">	</tspan><tspan  y="835.2" class="a">	</tspan><tspan  y="835.2" class="a"> </tspan><tspan  y="835.2" class="a">*</tspan><tspan  y="835.2" class="a"> </tspan><tspan  y="835.2" class="a">as the cleanup process might not have been executed.
+</tspan><tspan x="0" y="864" class="a">             */
+</tspan><tspan x="0" y="892.8" class="a">			if (!this.previousRequest || this.previousRequest.url != request.url) {
+</tspan><tspan x="0" y="921.6" class="a">				// Reset console messages
+</tspan><tspan x="0" y="950.4" class="a">				this.consoleMessages = browserManager.getConsoleMessageCollectionTemplate();
+</tspan><tspan x="0" y="1008" class="a">				// Load the request's page
+</tspan><tspan x="0" y="1036.8" class="a">				await browserManager.loadUrlWithRetries(this.page, request.url);
+</tspan><tspan x="0" y="1065.6" class="a">			}
+</tspan><tspan x="0" y="1094.4" class="a">		} catch (error) {
+</tspan><tspan x="0" y="1123.2" class="a">			return this.failRequest(error.message);
+</tspan><tspan x="0" y="1152" class="a">		}
+</tspan><tspan x="0" y="1209.6" class="a">		// Prepare the data that will be provided to the tool
+</tspan><tspan x="0" y="1238.4" class="a">		const availableData = {
+</tspan><tspan x="0" y="1267.2" class="a">			page: this.page,
+</tspan><tspan x="0" y="1296" class="a">			consoleMessages: this.consoleMessages,
+</tspan><tspan x="0" y="1324.8" class="a">			devices: puppeteer.devices
+</tspan><tspan x="0" y="1353.6" class="a">		};
+</tspan><tspan x="0" y="1411.2" class="a">		// Run the tool
+</tspan><tspan x="0" y="1440" class="a">		let rawData = null;
+</tspan><tspan x="0" y="1468.8" class="a">		let jsonResults = null;
+</tspan><tspan x="0" y="1497.6" class="a">		try {
+</tspan><tspan x="0" y="1526.4" class="a">			const toolClass = require(request.tool);
+</tspan><tspan x="0" y="1555.2" class="a">			const toolInstance = new toolClass(availableData);
+</tspan><tspan x="0" y="1584" class="a">			await toolInstance.run();
+</tspan><tspan x="0" y="1612.8" class="a">			const validationErrors = validator.checkResults(toolInstance.results);
+</tspan><tspan x="0" y="1670.4" class="a">			if (validationErrors.length) {
+</tspan><tspan x="0" y="1699.2" class="a">				sentryTransaction?.setTag(&quot;failure_reason&quot;, &quot;result_format&quot;);
+</tspan><tspan x="0" y="1728" class="a">				sentryTransaction?.finish();
+</tspan><tspan x="0" y="1756.8" class="a">				return await this.failRequest(&quot;The tool's results were invalid. This error will be reported to the tool's developer automatically.&quot;, validationErrors);
+</tspan><tspan x="0" y="1785.6" class="a">			}
+</tspan><tspan x="0" y="1843.2" class="a">			jsonResults = JSON.stringify(toolInstance.results);
+</tspan><tspan x="0" y="1872" class="a">			rawData = JSON.stringify(toolInstance?.rawData || null);
+</tspan><tspan x="0" y="1929.6" class="a">			await toolInstance.cleanup();
+</tspan><tspan x="0" y="1958.4" class="a">		} catch (error) {
+</tspan><tspan x="0" y="1987.2" class="a">			if (!jsonResults) {
+</tspan><tspan x="0" y="2016" class="a">				sentryTransaction?.setTag(&quot;failure_reason&quot;, &quot;exception&quot;);
+</tspan><tspan x="0" y="2044.8" class="a">				sentryTransaction?.finish();
+</tspan><tspan x="0" y="2073.6" class="a">				return await this.failRequest(&quot;An error has occured while running the tool on your page. This error will be reported to the tool's developer automatically.&quot;, error);
+</tspan><tspan x="0" y="2102.4" class="a">			} else {
+</tspan><tspan x="0" y="2131.2" class="a">				/*
+</tspan><tspan x="0" y="2160" class="a">                 * If the results are present, it means the error occured during the tool's cleanup() method.
+</tspan><tspan x="0" y="2188.8" class="a">                 * This isn't worth throwing an error to the end-user, but the developer should be notified.
+</tspan><tspan x="0" y="2217.6" class="a">                 */
+</tspan><tspan x="0" y="2246.4" class="a">				await Notify.developerError(request, error.message, error);
+</tspan><tspan x="0" y="2275.2" class="a">			}
+</tspan><tspan x="0" y="2304" class="a">		}
+</tspan><tspan x="0" y="2361.6" class="a">		const successResponse = await this.completeRequest(jsonResults, rawData, Date.now() - processingStartTime);
+</tspan><tspan x="0" y="2390.4" class="a">		sentryTransaction?.finish();
+</tspan><tspan x="0" y="2448" class="a">		return successResponse;
+</tspan></text><text style="transform:matrix(1,0,0,1,823,-813)" ><tspan x="0" y="28.8" class="a">		const queue = new Queue();
+</tspan><tspan x="0" y="57.6" class="a">		const request = await queue.next(this.previousRequest ? this.previousRequest.url : null);
+</tspan><tspan x="0" y="115.2" class="a">		if (!request) {
+</tspan><tspan x="0" y="144" class="a">			await queue.disconnect();
+</tspan><tspan x="0" y="172.8" class="a">			this.selfDestroy();
+</tspan><tspan x="0" y="201.6" class="a">			return;
+</tspan><tspan x="0" y="230.4" class="a">		}
+</tspan><tspan x="0" y="288" class="a">		const sentryTransaction = Sentry.startTransaction({
+</tspan><tspan x="0" y="316.8" class="a">			op: &quot;request&quot;,
+</tspan><tspan x="0" y="345.6" class="a">			name: request.tool,
+</tspan><tspan x="0" y="374.4" class="a">			data: {
+</tspan><tspan x="0" y="403.2" class="a">				request
+</tspan><tspan x="0" y="432" class="a">			}
+</tspan><tspan x="0" y="460.8" class="a">		});
+</tspan><tspan x="0" y="489.6" class="a">		this.activeRequest = request;
+</tspan><tspan x="0" y="547.2" class="a">		// Mark the request as being processed to prevent other processors from processing it
+</tspan><tspan x="0" y="576" class="a">		await queue.markAsProcessing(request.id);
+</tspan><tspan x="0" y="604.8" class="a">		await queue.disconnect();
+</tspan><tspan x="0" y="633.6" class="a">		const processingStartTime = Date.now();
+</tspan><tspan x="0" y="662.4" class="a">		console.log(`Request ${request.id} is now being processed... (${request.tool} for ${request.url})`);
+</tspan><tspan x="0" y="720" class="a">		try {
+</tspan><tspan x="0" y="748.8" class="a">			/**
+</tspan><tspan x="0" y="777.6" class="a">             * @TODO: Check if the previous request's tool is destructive, and reload the page if it is.
+</tspan><tspan x="0" y="806.4" class="a">             * The page should also be reloaded if the previous request resulted in an error, </tspan><tspan  y="806.4" class="a">
+</tspan><tspan x="0" y="835.2" class="a">	</tspan><tspan  y="835.2" class="a">	</tspan><tspan  y="835.2" class="a">	</tspan><tspan  y="835.2" class="a">	</tspan><tspan  y="835.2" class="a"> </tspan><tspan  y="835.2" class="a">*</tspan><tspan  y="835.2" class="a"> </tspan><tspan  y="835.2" class="a">as the cleanup process might not have been executed.
+</tspan><tspan x="0" y="864" class="a">             */
+</tspan><tspan x="0" y="892.8" class="a">			if (!this.previousRequest || this.previousRequest.url != request.url) {
+</tspan><tspan x="0" y="921.6" class="a">				// Reset console messages
+</tspan><tspan x="0" y="950.4" class="a">				this.consoleMessages = browserManager.getConsoleMessageCollectionTemplate();
+</tspan><tspan x="0" y="1008" class="a">				// Load the request's page
+</tspan><tspan x="0" y="1036.8" class="a">				await browserManager.loadUrlWithRetries(this.page, request.url);
+</tspan><tspan x="0" y="1065.6" class="a">			}
+</tspan><tspan x="0" y="1094.4" class="a">		} catch (error) {
+</tspan><tspan x="0" y="1123.2" class="a">			return this.failRequest(error.message);
+</tspan><tspan x="0" y="1152" class="a">		}
+</tspan><tspan x="0" y="1209.6" class="a">		// Prepare the data that will be provided to the tool
+</tspan><tspan x="0" y="1238.4" class="a">		const availableData = {
+</tspan><tspan x="0" y="1267.2" class="a">			page: this.page,
+</tspan><tspan x="0" y="1296" class="a">			consoleMessages: this.consoleMessages,
+</tspan><tspan x="0" y="1324.8" class="a">			devices: puppeteer.devices
+</tspan><tspan x="0" y="1353.6" class="a">		};
+</tspan><tspan x="0" y="1411.2" class="a">		// Run the tool
+</tspan><tspan x="0" y="1440" class="a">		let rawData = null;
+</tspan><tspan x="0" y="1468.8" class="a">		let jsonResults = null;
+</tspan><tspan x="0" y="1497.6" class="a">		try {
+</tspan><tspan x="0" y="1526.4" class="a">			const toolClass = require(request.tool);
+</tspan><tspan x="0" y="1555.2" class="a">			const toolInstance = new toolClass(availableData);
+</tspan><tspan x="0" y="1584" class="a">			await toolInstance.run();
+</tspan><tspan x="0" y="1612.8" class="a">			const validationErrors = validator.checkResults(toolInstance.results);
+</tspan><tspan x="0" y="1670.4" class="a">			if (validationErrors.length) {
+</tspan><tspan x="0" y="1699.2" class="a">				sentryTransaction?.setTag(&quot;failure_reason&quot;, &quot;result_format&quot;);
+</tspan><tspan x="0" y="1728" class="a">				sentryTransaction?.finish();
+</tspan><tspan x="0" y="1756.8" class="a">				return await this.failRequest(&quot;The tool's results were invalid. This error will be reported to the tool's developer automatically.&quot;, validationErrors);
+</tspan><tspan x="0" y="1785.6" class="a">			}
+</tspan><tspan x="0" y="1843.2" class="a">			jsonResults = JSON.stringify(toolInstance.results);
+</tspan><tspan x="0" y="1872" class="a">			rawData = JSON.stringify(toolInstance?.rawData || null);
+</tspan><tspan x="0" y="1929.6" class="a">			await toolInstance.cleanup();
+</tspan><tspan x="0" y="1958.4" class="a">		} catch (error) {
+</tspan><tspan x="0" y="1987.2" class="a">			if (!jsonResults) {
+</tspan><tspan x="0" y="2016" class="a">				sentryTransaction?.setTag(&quot;failure_reason&quot;, &quot;exception&quot;);
+</tspan><tspan x="0" y="2044.8" class="a">				sentryTransaction?.finish();
+</tspan><tspan x="0" y="2073.6" class="a">				return await this.failRequest(&quot;An error has occured while running the tool on your page. This error will be reported to the tool's developer automatically.&quot;, error);
+</tspan><tspan x="0" y="2102.4" class="a">			} else {
+</tspan><tspan x="0" y="2131.2" class="a">				/*
+</tspan><tspan x="0" y="2160" class="a">                 * If the results are present, it means the error occured during the tool's cleanup() method.
+</tspan><tspan x="0" y="2188.8" class="a">                 * This isn't worth throwing an error to the end-user, but the developer should be notified.
+</tspan><tspan x="0" y="2217.6" class="a">                 */
+</tspan><tspan x="0" y="2246.4" class="a">				await Notify.developerError(request, error.message, error);
+</tspan><tspan x="0" y="2275.2" class="a">			}
+</tspan><tspan x="0" y="2304" class="a">		}
+</tspan><tspan x="0" y="2361.6" class="a">		const successResponse = await this.completeRequest(jsonResults, rawData, Date.now() - processingStartTime);
+</tspan><tspan x="0" y="2390.4" class="a">		sentryTransaction?.finish();
+</tspan><tspan x="0" y="2448" class="a">		return successResponse;
+</tspan></text><text style="transform:matrix(1,0,0,1,-24,26)" ><tspan x="0" y="0" class="a">	async failRequest(errorMessage, errorData = null) {
+</tspan><tspan x="0" y="28.8" class="a">		const queue = new Queue();
+</tspan><tspan x="0" y="57.6" class="a">		const request = Object.assign({}, this.activeRequest);
+</tspan><tspan x="0" y="115.2" class="a">		this.previousRequest = request;
+</tspan><tspan x="0" y="144" class="a">		this.activeRequest = null;
+</tspan><tspan x="0" y="201.6" class="a">		await queue.markAsCompleted(request, null);
+</tspan><tspan x="0" y="230.4" class="a">		await Promise.all([
+</tspan><tspan x="0" y="259.2" class="a">			Notify.requestError(request, errorMessage),
+</tspan><tspan x="0" y="288" class="a">			Notify.developerError(request, errorMessage, errorData),
+</tspan><tspan x="0" y="316.8" class="a">			queue.disconnect(),
+</tspan><tspan x="0" y="345.6" class="a">		]);
+</tspan><tspan x="0" y="403.2" class="a">		console.error(`Request ${request.id} failed: ${errorMessage} : ${JSON.stringify(errorData)}\n`);
+</tspan><tspan x="0" y="460.8" class="a">		this.processNextRequest();
+</tspan><tspan x="0" y="489.6" class="a">	}
+</tspan><tspan x="0" y="547.2" class="a">	async completeRequest(jsonResults, rawData, processingTime) {
+</tspan><tspan x="0" y="576" class="a">		const queue = new Queue();
+</tspan><tspan x="0" y="604.8" class="a">		const request = Object.assign({}, this.activeRequest);
+</tspan><tspan x="0" y="662.4" class="a">		this.previousRequest = request;
+</tspan><tspan x="0" y="691.2" class="a">		this.activeRequest = null;
+</tspan><tspan x="0" y="748.8" class="a">		await queue.markAsCompleted(request, processingTime);
+</tspan><tspan x="0" y="777.6" class="a">		await Promise.all([
+</tspan><tspan x="0" y="806.4" class="a">			Notify.requestSuccess(request, JSON.parse(jsonResults), JSON.parse(rawData), processingTime),
+</tspan><tspan x="0" y="835.2" class="a">			queue.disconnect(),
+</tspan><tspan x="0" y="864" class="a">		]);
+</tspan><tspan x="0" y="921.6" class="a">		console.log(`Request ${request.id} completed successfully in ${processingTime} ms (${request.tool} for ${request.url})\n`);
+</tspan><tspan x="0" y="979.2" class="a">		this.processNextRequest();
+</tspan><tspan x="0" y="1008" class="a">	}
+</tspan><tspan x="0" y="1065.6" class="a">	selfDestroy() {
+</tspan><tspan x="0" y="1094.4" class="a">		if (this.manager) {
+</tspan><tspan x="0" y="1123.2" class="a">			this.manager.kill(this);
+</tspan><tspan x="0" y="1152" class="a">		}
+</tspan><tspan x="0" y="1180.8" class="a">	}
+</tspan><tspan x="0" y="1238.4" class="a">	destroy() {
+</tspan><tspan x="0" y="1267.2" class="a">		if (this.browserContext) {
+</tspan><tspan x="0" y="1296" class="a">			this.browserContext.close();
+</tspan><tspan x="0" y="1324.8" class="a">		}
+</tspan><tspan x="0" y="1353.6" class="a">	}
+</tspan></text><text style="transform:matrix(1,0,0,1,1286,172)" ><tspan x="0" y="0" class="a">	async failRequest(errorMessage, errorData = null) {
+</tspan><tspan x="0" y="28.8" class="a">		const queue = new Queue();
+</tspan><tspan x="0" y="57.6" class="a">		const request = Object.assign({}, this.activeRequest);
+</tspan><tspan x="0" y="115.2" class="a">		this.previousRequest = request;
+</tspan><tspan x="0" y="144" class="a">		this.activeRequest = null;
+</tspan><tspan x="0" y="201.6" class="a">		await queue.markAsCompleted(request, null);
+</tspan><tspan x="0" y="230.4" class="a">		await Promise.all([
+</tspan><tspan x="0" y="259.2" class="a">			Notify.requestError(request, errorMessage),
+</tspan><tspan x="0" y="288" class="a">			Notify.developerError(request, errorMessage, errorData),
+</tspan><tspan x="0" y="316.8" class="a">			queue.disconnect(),
+</tspan><tspan x="0" y="345.6" class="a">		]);
+</tspan><tspan x="0" y="403.2" class="a">		console.error(`Request ${request.id} failed: ${errorMessage} : ${JSON.stringify(errorData)}\n`);
+</tspan><tspan x="0" y="460.8" class="a">		this.processNextRequest();
+</tspan><tspan x="0" y="489.6" class="a">	}
+</tspan><tspan x="0" y="547.2" class="a">	async completeRequest(jsonResults, rawData, processingTime) {
+</tspan><tspan x="0" y="576" class="a">		const queue = new Queue();
+</tspan><tspan x="0" y="604.8" class="a">		const request = Object.assign({}, this.activeRequest);
+</tspan><tspan x="0" y="662.4" class="a">		this.previousRequest = request;
+</tspan><tspan x="0" y="691.2" class="a">		this.activeRequest = null;
+</tspan><tspan x="0" y="748.8" class="a">		await queue.markAsCompleted(request, processingTime);
+</tspan><tspan x="0" y="777.6" class="a">		await Promise.all([
+</tspan><tspan x="0" y="806.4" class="a">			Notify.requestSuccess(request, JSON.parse(jsonResults), JSON.parse(rawData), processingTime),
+</tspan><tspan x="0" y="835.2" class="a">			queue.disconnect(),
+</tspan><tspan x="0" y="864" class="a">		]);
+</tspan><tspan x="0" y="921.6" class="a">		console.log(`Request ${request.id} completed successfully in ${processingTime} ms (${request.tool} for ${request.url})\n`);
+</tspan><tspan x="0" y="979.2" class="a">		this.processNextRequest();
+</tspan><tspan x="0" y="1008" class="a">	}
+</tspan><tspan x="0" y="1065.6" class="a">	selfDestroy() {
+</tspan><tspan x="0" y="1094.4" class="a">		if (this.manager) {
+</tspan><tspan x="0" y="1123.2" class="a">			this.manager.kill(this);
+</tspan><tspan x="0" y="1152" class="a">		}
+</tspan><tspan x="0" y="1180.8" class="a">	}
+</tspan><tspan x="0" y="1238.4" class="a">	destroy() {
+</tspan><tspan x="0" y="1267.2" class="a">		if (this.browserContext) {
+</tspan><tspan x="0" y="1296" class="a">			this.browserContext.close();
+</tspan><tspan x="0" y="1324.8" class="a">		}
+</tspan><tspan x="0" y="1353.6" class="a">	}
+</tspan></text><text style="transform:matrix(1,0,0,1,192,53)" ><tspan x="0" y="0" class="a">const pendingCountPerHostname = new Map();
+</tspan><tspan x="0" y="28.8" class="a">		const hostnamesCurrentlyProcessedByThisWorker = new Set();
+</tspan><tspan x="0" y="57.6" class="a">		const reprocessDate = Queue.getReprocessDate();
+</tspan><tspan x="0" y="115.2" class="a">		for (const row of rows) {
+</tspan><tspan x="0" y="144" class="a">			// Requests that have been &quot;processing&quot; for more than 2 minutes
+</tspan><tspan x="0" y="172.8" class="a">			if (row.processed_at &amp;&amp; row.processed_at &lt;= reprocessDate) {
+</tspan><tspan x="0" y="201.6" class="a">				row.processed_at = null;
+</tspan><tspan x="0" y="230.4" class="a">				row.processed_by = null;
+</tspan><tspan x="0" y="259.2" class="a">			}
+</tspan><tspan x="0" y="316.8" class="a">			if (row.processed_at) {
+</tspan><tspan x="0" y="345.6" class="a">				// Calculate the number of concurrent same-host requests that are currently being processed
+</tspan><tspan x="0" y="374.4" class="a">				pendingCountPerHostname.set(row.hostname, (pendingCountPerHostname.get(row.hostname) || 0) + 1);
+</tspan><tspan x="0" y="432" class="a">				// Flag hostnames that are being processed by this very worker at the moment
+</tspan><tspan x="0" y="460.8" class="a">				if (row.processed_by == processIdentifier) {
+</tspan><tspan x="0" y="489.6" class="a">					hostnamesCurrentlyProcessedByThisWorker.add(row.hostname);
+</tspan><tspan x="0" y="518.4" class="a">				}
+</tspan><tspan x="0" y="547.2" class="a">			}
+</tspan><tspan x="0" y="576" class="a">		}
+</tspan><tspan x="0" y="633.6" class="a">		const filteredRows = rows.filter(row =&gt; {
+</tspan><tspan x="0" y="662.4" class="a">			// Never process two requests from the same hostname simultaneously on the same worker
+</tspan><tspan x="0" y="691.2" class="a">			if (hostnamesCurrentlyProcessedByThisWorker.has(row.hostname)) {
+</tspan><tspan x="0" y="720" class="a">				return false;
+</tspan><tspan x="0" y="748.8" class="a">			}
+</tspan><tspan x="0" y="806.4" class="a">			// Don't exceed the MAX_CONCURRENT_SAME_HOST_REQUESTS
+</tspan><tspan x="0" y="835.2" class="a">			if (pendingCountPerHostname.get(row.hostname) &gt;= MAX_CONCURRENT_SAME_HOST_REQUESTS) {
+</tspan><tspan x="0" y="864" class="a">				return false;
+</tspan><tspan x="0" y="892.8" class="a">			}
+</tspan><tspan x="0" y="950.4" class="a">			return true;
+</tspan><tspan x="0" y="979.2" class="a">		});
+</tspan><tspan x="0" y="1036.8" class="a">		// Prioritize the remaining rows
+</tspan><tspan x="0" y="1065.6" class="a">		const sortedRows = filteredRows.sort((rowA, rowB) =&gt; {
+</tspan><tspan x="0" y="1094.4" class="a">			// To speed up processing, same-page requests are prioritized as they prevent unnecessary page reloads
+</tspan><tspan x="0" y="1123.2" class="a">			if (currentUrl) {
+</tspan><tspan x="0" y="1152" class="a">				if (rowA.url == currentUrl) {
+</tspan><tspan x="0" y="1180.8" class="a">					return -1;
+</tspan><tspan x="0" y="1209.6" class="a">				}
+</tspan><tspan x="0" y="1267.2" class="a">				if (rowB.url == currentUrl) {
+</tspan><tspan x="0" y="1296" class="a">					return 1;
+</tspan><tspan x="0" y="1324.8" class="a">				}
+</tspan><tspan x="0" y="1353.6" class="a">			}
+</tspan><tspan x="0" y="1411.2" class="a">			if (rowA.priority != rowB.priority) {
+</tspan><tspan x="0" y="1440" class="a">				return rowA.priority &gt; rowB.priority ? -1 : 1;
+</tspan><tspan x="0" y="1468.8" class="a">			}
+</tspan><tspan x="0" y="1526.4" class="a">			if (rowA.received_at != rowB.received_at) {
+</tspan><tspan x="0" y="1555.2" class="a">				return rowA.received_at &gt; rowB.received_at ? 1 : -1;
+</tspan><tspan x="0" y="1584" class="a">			}
+</tspan><tspan x="0" y="1641.6" class="a">			return 0;
+</tspan><tspan x="0" y="1670.4" class="a">		});
+</tspan><tspan x="0" y="1728" class="a">		return sortedRows[0] || null;
+</tspan></text><text style="transform:matrix(1,0,0,1,1094,-741)" ><tspan x="0" y="0" class="a">const pendingCountPerHostname = new Map();
+</tspan><tspan x="0" y="28.8" class="a">		const hostnamesCurrentlyProcessedByThisWorker = new Set();
+</tspan><tspan x="0" y="57.6" class="a">		const reprocessDate = Queue.getReprocessDate();
+</tspan><tspan x="0" y="115.2" class="a">		for (const row of rows) {
+</tspan><tspan x="0" y="144" class="a">			// Requests that have been &quot;processing&quot; for more than 2 minutes
+</tspan><tspan x="0" y="172.8" class="a">			if (row.processed_at &amp;&amp; row.processed_at &lt;= reprocessDate) {
+</tspan><tspan x="0" y="201.6" class="a">				row.processed_at = null;
+</tspan><tspan x="0" y="230.4" class="a">				row.processed_by = null;
+</tspan><tspan x="0" y="259.2" class="a">			}
+</tspan><tspan x="0" y="316.8" class="a">			if (row.processed_at) {
+</tspan><tspan x="0" y="345.6" class="a">				// Calculate the number of concurrent same-host requests that are currently being processed
+</tspan><tspan x="0" y="374.4" class="a">				pendingCountPerHostname.set(row.hostname, (pendingCountPerHostname.get(row.hostname) || 0) + 1);
+</tspan><tspan x="0" y="432" class="a">				// Flag hostnames that are being processed by this very worker at the moment
+</tspan><tspan x="0" y="460.8" class="a">				if (row.processed_by == processIdentifier) {
+</tspan><tspan x="0" y="489.6" class="a">					hostnamesCurrentlyProcessedByThisWorker.add(row.hostname);
+</tspan><tspan x="0" y="518.4" class="a">				}
+</tspan><tspan x="0" y="547.2" class="a">			}
+</tspan><tspan x="0" y="576" class="a">		}
+</tspan><tspan x="0" y="633.6" class="a">		const filteredRows = rows.filter(row =&gt; {
+</tspan><tspan x="0" y="662.4" class="a">			// Never process two requests from the same hostname simultaneously on the same worker
+</tspan><tspan x="0" y="691.2" class="a">			if (hostnamesCurrentlyProcessedByThisWorker.has(row.hostname)) {
+</tspan><tspan x="0" y="720" class="a">				return false;
+</tspan><tspan x="0" y="748.8" class="a">			}
+</tspan><tspan x="0" y="806.4" class="a">			// Don't exceed the MAX_CONCURRENT_SAME_HOST_REQUESTS
+</tspan><tspan x="0" y="835.2" class="a">			if (pendingCountPerHostname.get(row.hostname) &gt;= MAX_CONCURRENT_SAME_HOST_REQUESTS) {
+</tspan><tspan x="0" y="864" class="a">				return false;
+</tspan><tspan x="0" y="892.8" class="a">			}
+</tspan><tspan x="0" y="950.4" class="a">			return true;
+</tspan><tspan x="0" y="979.2" class="a">		});
+</tspan><tspan x="0" y="1036.8" class="a">		// Prioritize the remaining rows
+</tspan><tspan x="0" y="1065.6" class="a">		const sortedRows = filteredRows.sort((rowA, rowB) =&gt; {
+</tspan><tspan x="0" y="1094.4" class="a">			// To speed up processing, same-page requests are prioritized as they prevent unnecessary page reloads
+</tspan><tspan x="0" y="1123.2" class="a">			if (currentUrl) {
+</tspan><tspan x="0" y="1152" class="a">				if (rowA.url == currentUrl) {
+</tspan><tspan x="0" y="1180.8" class="a">					return -1;
+</tspan><tspan x="0" y="1209.6" class="a">				}
+</tspan><tspan x="0" y="1267.2" class="a">				if (rowB.url == currentUrl) {
+</tspan><tspan x="0" y="1296" class="a">					return 1;
+</tspan><tspan x="0" y="1324.8" class="a">				}
+</tspan><tspan x="0" y="1353.6" class="a">			}
+</tspan><tspan x="0" y="1411.2" class="a">			if (rowA.priority != rowB.priority) {
+</tspan><tspan x="0" y="1440" class="a">				return rowA.priority &gt; rowB.priority ? -1 : 1;
+</tspan><tspan x="0" y="1468.8" class="a">			}
+</tspan><tspan x="0" y="1526.4" class="a">			if (rowA.received_at != rowB.received_at) {
+</tspan><tspan x="0" y="1555.2" class="a">				return rowA.received_at &gt; rowB.received_at ? 1 : -1;
+</tspan><tspan x="0" y="1584" class="a">			}
+</tspan><tspan x="0" y="1641.6" class="a">			return 0;
+</tspan><tspan x="0" y="1670.4" class="a">		});
+</tspan><tspan x="0" y="1728" class="a">		return sortedRows[0] || null;
+</tspan></text><text style="transform:matrix(1,0,0,1,979,-91)" ><tspan x="0" y="0" class="a">project: async (req, res) =&gt; {
+</tspan><tspan x="0" y="28.8" class="a">		const queue = new Queue();
+</tspan><tspan x="0" y="57.6" class="a">		const responseBody = {
+</tspan><tspan x="0" y="86.4" class="a">			success: true,
+</tspan><tspan x="0" y="115.2" class="a">			message: &quot;&quot;,
+</tspan><tspan x="0" y="144" class="a">			data: {
+</tspan><tspan x="0" y="172.8" class="a">				pending: false,
+</tspan><tspan x="0" y="201.6" class="a">				requestCount: null,
+</tspan><tspan x="0" y="230.4" class="a">				timeEstimate: null,
+</tspan><tspan x="0" y="259.2" class="a">			},
+</tspan><tspan x="0" y="288" class="a">		};
+</tspan><tspan x="0" y="345.6" class="a">		if (typeof req.query.url == &quot;undefined&quot;) {
+</tspan><tspan x="0" y="374.4" class="a">			res.send({
+</tspan><tspan x="0" y="403.2" class="a">				success: false,
+</tspan><tspan x="0" y="432" class="a">				message: &quot;Missing `url` GET parameter.&quot;
+</tspan><tspan x="0" y="460.8" class="a">			});
+</tspan><tspan x="0" y="489.6" class="a">			return;
+</tspan><tspan x="0" y="518.4" class="a">		}
+</tspan><tspan x="0" y="576" class="a">		const projectUrl = req.query.url;
+</tspan><tspan x="0" y="604.8" class="a">		const pendingRequests = await queue.getRequestsMatchingUrl(projectUrl);
+</tspan><tspan x="0" y="633.6" class="a">		await queue.disconnect();
+</tspan><tspan x="0" y="691.2" class="a">		responseBody.data.pending = pendingRequests.length &gt; 0;
+</tspan><tspan x="0" y="720" class="a">		responseBody.data.requestCount = pendingRequests.length;
+</tspan><tspan x="0" y="748.8" class="a">		responseBody.data.timeEstimate = await estimateProcessingTime(pendingRequests);
+</tspan><tspan x="0" y="806.4" class="a">		res.send(responseBody);
+</tspan><tspan x="0" y="835.2" class="a">	}
+</tspan></text><text style="transform:matrix(1,0,0,1,480,18)" ><tspan x="0" y="0" class="a">async launchPage() {
+</tspan><tspan x="0" y="28.8" class="a">		await this.ensureBrowserIsUp();
+</tspan><tspan x="0" y="86.4" class="a">		if (await this.hasReachedMaxLoad()) {
+</tspan><tspan x="0" y="115.2" class="a">			throw new Error(&quot;Cannot launch any more pages or browser contexts: the maximum load is reached.&quot;);
+</tspan><tspan x="0" y="144" class="a">		}
+</tspan><tspan x="0" y="201.6" class="a">		const context = await this.browser.createIncognitoBrowserContext();
+</tspan><tspan x="0" y="230.4" class="a">		const page = await context.newPage();
+</tspan><tspan x="0" y="288" class="a">		await Promise.all([
+</tspan><tspan x="0" y="316.8" class="a">			page.setExtraHTTPHeaders({ DNT: &quot;1&quot; }),
+</tspan><tspan x="0" y="345.6" class="a">			page.setViewport({ width: 1920, height: 1080 }),
+</tspan><tspan x="0" y="374.4" class="a">			page.setCacheEnabled(false),
+</tspan><tspan x="0" y="403.2" class="a">		]);
+</tspan><tspan x="0" y="460.8" class="a">		return { context, page };
+</tspan><tspan x="0" y="489.6" class="a">	}
+</tspan><tspan x="0" y="547.2" class="a">	async availableContextSpots() {
+</tspan><tspan x="0" y="576" class="a">		await this.ensureBrowserIsUp();
+</tspan><tspan x="0" y="633.6" class="a">		const contexts = this.browser.browserContexts();
+</tspan><tspan x="0" y="662.4" class="a">		// Puppeteer always has one context up and running by default - don't count it.
+</tspan><tspan x="0" y="691.2" class="a">		return BROWSER_MAX_CONCURRENT_CONTEXTS - (contexts.length - 1);
+</tspan><tspan x="0" y="720" class="a">	}
+</tspan><tspan x="0" y="777.6" class="a">	async hasReachedMaxLoad() {
+</tspan><tspan x="0" y="806.4" class="a">		if (!(await this.availableContextSpots())) {
+</tspan><tspan x="0" y="835.2" class="a">			return true;
+</tspan><tspan x="0" y="864" class="a">		}
+</tspan><tspan x="0" y="921.6" class="a">		const pages = await this.browser.pages();
+</tspan><tspan x="0" y="950.4" class="a">		if (pages.length &gt; BROWSER_MAX_CONCURRENT_PAGES) {
+</tspan><tspan x="0" y="979.2" class="a">			return true;
+</tspan><tspan x="0" y="1008" class="a">		}
+</tspan><tspan x="0" y="1065.6" class="a">		return false;
+</tspan><tspan x="0" y="1094.4" class="a">	}
+</tspan></text><text style="transform:matrix(1,0,0,1,675,-49)" ><tspan x="0" y="0" class="a">up: async (req, res) =&gt; {
+</tspan><tspan x="0" y="28.8" class="a">		let databaseWorks = false;
+</tspan><tspan x="0" y="57.6" class="a">		const database = await createDatabaseClient();
+</tspan><tspan x="0" y="115.2" class="a">		try {
+</tspan><tspan x="0" y="144" class="a">			const [rows] = await database.query(&quot;SELECT COUNT(*) FROM requests&quot;);
+</tspan><tspan x="0" y="201.6" class="a">			databaseWorks = rows.length == 1;
+</tspan><tspan x="0" y="230.4" class="a">		} catch (error) {
+</tspan><tspan x="0" y="259.2" class="a">			console.error(error);
+</tspan><tspan x="0" y="288" class="a">		} finally {
+</tspan><tspan x="0" y="316.8" class="a">			await database.end();
+</tspan><tspan x="0" y="345.6" class="a">		}
+</tspan><tspan x="0" y="403.2" class="a">		const responseBody = {
+</tspan><tspan x="0" y="432" class="a">			success: true,
+</tspan><tspan x="0" y="460.8" class="a">			uptime: process.uptime(),
+</tspan><tspan x="0" y="489.6" class="a">			database_up: databaseWorks,
+</tspan><tspan x="0" y="518.4" class="a">		};
+</tspan><tspan x="0" y="576" class="a">		res.send(responseBody);
+</tspan><tspan x="0" y="604.8" class="a">	},
+</tspan><tspan x="0" y="662.4" class="a">	queue: async (req, res) =&gt; {
+</tspan><tspan x="0" y="691.2" class="a">		const queue = new Queue();
+</tspan><tspan x="0" y="720" class="a">		const responseBody = {
+</tspan><tspan x="0" y="748.8" class="a">			success: true,
+</tspan><tspan x="0" y="777.6" class="a">			message: &quot;&quot;,
+</tspan><tspan x="0" y="806.4" class="a">			data: {
+</tspan><tspan x="0" y="835.2" class="a">				unassignedRequests: await queue.nonAssignedCount(),
+</tspan><tspan x="0" y="864" class="a">				pendingRequests: await queue.pendingCount(),
+</tspan><tspan x="0" y="892.8" class="a">			},
+</tspan><tspan x="0" y="921.6" class="a">		};
+</tspan><tspan x="0" y="979.2" class="a">		await queue.disconnect();
+</tspan><tspan x="0" y="1036.8" class="a">		res.send(responseBody);
+</tspan><tspan x="0" y="1065.6" class="a">	},
+</tspan><tspan x="0" y="1123.2" class="a">	timeEstimates: async (req, res) =&gt; {
+</tspan><tspan x="0" y="1152" class="a">		const queue = new Queue();
+</tspan><tspan x="0" y="1180.8" class="a">		const responseBody = {
+</tspan><tspan x="0" y="1209.6" class="a">			success: true,
+</tspan><tspan x="0" y="1238.4" class="a">			message: &quot;&quot;,
+</tspan><tspan x="0" y="1267.2" class="a">			data: null,
+</tspan><tspan x="0" y="1296" class="a">		};
+</tspan><tspan x="0" y="1353.6" class="a">		try {
+</tspan><tspan x="0" y="1382.4" class="a">			const timesByTool = await queue.getAverageProcessingTimes();
+</tspan><tspan x="0" y="1411.2" class="a">			responseBody.data = timesByTool;
+</tspan><tspan x="0" y="1440" class="a">			responseBody.data.maxConcurrentRequests = MAX_CONCURRENT_SAME_HOST_REQUESTS;
+</tspan><tspan x="0" y="1468.8" class="a">		} catch (error) {
+</tspan><tspan x="0" y="1497.6" class="a">			responseBody.success = false;
+</tspan><tspan x="0" y="1526.4" class="a">			responseBody.message = &quot;The average processing times could not be obtained.&quot;;
+</tspan><tspan x="0" y="1555.2" class="a">		}
+</tspan><tspan x="0" y="1612.8" class="a">		await queue.disconnect();
+</tspan><tspan x="0" y="1670.4" class="a">		res.send(responseBody);
+</tspan><tspan x="0" y="1699.2" class="a">	},
+</tspan></text><text style="transform:matrix(1,0,0,1,1511,-638)" ><tspan x="0" y="0" class="a">up: async (req, res) =&gt; {
+</tspan><tspan x="0" y="28.8" class="a">		let databaseWorks = false;
+</tspan><tspan x="0" y="57.6" class="a">		const database = await createDatabaseClient();
+</tspan><tspan x="0" y="115.2" class="a">		try {
+</tspan><tspan x="0" y="144" class="a">			const [rows] = await database.query(&quot;SELECT COUNT(*) FROM requests&quot;);
+</tspan><tspan x="0" y="201.6" class="a">			databaseWorks = rows.length == 1;
+</tspan><tspan x="0" y="230.4" class="a">		} catch (error) {
+</tspan><tspan x="0" y="259.2" class="a">			console.error(error);
+</tspan><tspan x="0" y="288" class="a">		} finally {
+</tspan><tspan x="0" y="316.8" class="a">			await database.end();
+</tspan><tspan x="0" y="345.6" class="a">		}
+</tspan><tspan x="0" y="403.2" class="a">		const responseBody = {
+</tspan><tspan x="0" y="432" class="a">			success: true,
+</tspan><tspan x="0" y="460.8" class="a">			uptime: process.uptime(),
+</tspan><tspan x="0" y="489.6" class="a">			database_up: databaseWorks,
+</tspan><tspan x="0" y="518.4" class="a">		};
+</tspan><tspan x="0" y="576" class="a">		res.send(responseBody);
+</tspan><tspan x="0" y="604.8" class="a">	},
+</tspan><tspan x="0" y="662.4" class="a">	queue: async (req, res) =&gt; {
+</tspan><tspan x="0" y="691.2" class="a">		const queue = new Queue();
+</tspan><tspan x="0" y="720" class="a">		const responseBody = {
+</tspan><tspan x="0" y="748.8" class="a">			success: true,
+</tspan><tspan x="0" y="777.6" class="a">			message: &quot;&quot;,
+</tspan><tspan x="0" y="806.4" class="a">			data: {
+</tspan><tspan x="0" y="835.2" class="a">				unassignedRequests: await queue.nonAssignedCount(),
+</tspan><tspan x="0" y="864" class="a">				pendingRequests: await queue.pendingCount(),
+</tspan><tspan x="0" y="892.8" class="a">			},
+</tspan><tspan x="0" y="921.6" class="a">		};
+</tspan><tspan x="0" y="979.2" class="a">		await queue.disconnect();
+</tspan><tspan x="0" y="1036.8" class="a">		res.send(responseBody);
+</tspan><tspan x="0" y="1065.6" class="a">	},
+</tspan><tspan x="0" y="1123.2" class="a">	timeEstimates: async (req, res) =&gt; {
+</tspan><tspan x="0" y="1152" class="a">		const queue = new Queue();
+</tspan><tspan x="0" y="1180.8" class="a">		const responseBody = {
+</tspan><tspan x="0" y="1209.6" class="a">			success: true,
+</tspan><tspan x="0" y="1238.4" class="a">			message: &quot;&quot;,
+</tspan><tspan x="0" y="1267.2" class="a">			data: null,
+</tspan><tspan x="0" y="1296" class="a">		};
+</tspan><tspan x="0" y="1353.6" class="a">		try {
+</tspan><tspan x="0" y="1382.4" class="a">			const timesByTool = await queue.getAverageProcessingTimes();
+</tspan><tspan x="0" y="1411.2" class="a">			responseBody.data = timesByTool;
+</tspan><tspan x="0" y="1440" class="a">			responseBody.data.maxConcurrentRequests = MAX_CONCURRENT_SAME_HOST_REQUESTS;
+</tspan><tspan x="0" y="1468.8" class="a">		} catch (error) {
+</tspan><tspan x="0" y="1497.6" class="a">			responseBody.success = false;
+</tspan><tspan x="0" y="1526.4" class="a">			responseBody.message = &quot;The average processing times could not be obtained.&quot;;
+</tspan><tspan x="0" y="1555.2" class="a">		}
+</tspan><tspan x="0" y="1612.8" class="a">		await queue.disconnect();
+</tspan><tspan x="0" y="1670.4" class="a">		res.send(responseBody);
+</tspan><tspan x="0" y="1699.2" class="a">	},
+</tspan></text></svg>
